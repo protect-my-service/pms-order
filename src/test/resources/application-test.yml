@@ -1,0 +1,31 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:15432/pms_order_test
+    username: test
+    password: test
+
+  jpa:
+    hibernate:
+      ddl-auto: create
+    properties:
+      hibernate:
+        format_sql: false
+        show_sql: false
+        default_batch_fetch_size: 100
+    open-in-view: false
+
+  rabbitmq:
+    host: localhost
+    port: 25672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        acknowledge-mode: auto
+        retry:
+          enabled: false
+
+logging:
+  level:
+    org.hibernate.SQL: WARN
+    com.pms.order: DEBUG
