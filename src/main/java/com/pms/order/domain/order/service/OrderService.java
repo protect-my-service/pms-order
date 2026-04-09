@@ -10,6 +10,8 @@ import com.pms.order.domain.order.dto.*;
 import com.pms.order.domain.order.entity.Order;
 import com.pms.order.domain.order.entity.OrderItem;
 import com.pms.order.domain.order.entity.OrderStatus;
+import com.pms.order.domain.order.entity.OrderNumberSequence;
+import com.pms.order.domain.order.repository.OrderNumberSequenceRepository;
 import com.pms.order.domain.order.repository.OrderRepository;
 import com.pms.order.domain.payment.entity.Payment;
 import com.pms.order.domain.payment.repository.PaymentRepository;
@@ -32,15 +34,13 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicLong;
 
 @Service
 @RequiredArgsConstructor
 public class OrderService {
 
-    private static final AtomicLong ORDER_SEQUENCE = new AtomicLong(0);
-
     private final OrderRepository orderRepository;
+    private final OrderNumberSequenceRepository orderNumberSequenceRepository;
     private final MemberRepository memberRepository;
     private final CartRepository cartRepository;
     private final CartItemRepository cartItemRepository;
@@ -176,7 +176,7 @@ public class OrderService {
 
     private String generateOrderNumber() {
         String datePrefix = "ORD-" + LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd")) + "-";
-        long seq = ORDER_SEQUENCE.incrementAndGet();
+        long seq = orderNumberSequenceRepository.save(new OrderNumberSequence()).getId();
         return datePrefix + String.format("%06d", seq);
     }
 }

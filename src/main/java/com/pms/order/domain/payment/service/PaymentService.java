@@ -11,6 +11,7 @@ import com.pms.order.domain.payment.entity.PaymentStatus;
 import com.pms.order.domain.payment.repository.PaymentRepository;
 import com.pms.order.domain.product.entity.Product;
 import com.pms.order.domain.product.repository.ProductRepository;
+import com.pms.order.event.OrderCancelledEvent;
 import com.pms.order.event.OrderPaidEvent;
 import com.pms.order.global.exception.BusinessException;
 import com.pms.order.global.exception.ErrorCode;
@@ -62,6 +63,16 @@ public class PaymentService {
                     .build();
             failedPayment.fail();
             paymentRepository.save(failedPayment);
+            order.changeStatus(OrderStatus.CANCELLED);
+
+            applicationEventPublisher.publishEvent(OrderCancelledEvent.builder()
+                    .data(OrderCancelledEvent.OrderCancelledData.builder()
+                            .orderId(order.getId())
+                            .orderNumber(order.getOrderNumber())
+                            .reason("결제 실패로 인한 자동 취소")
+                            .refundAmount(java.math.BigDecimal.ZERO)
+                            .build())
+                    .build());
 
             throw e;
         }

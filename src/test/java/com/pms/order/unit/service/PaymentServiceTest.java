@@ -12,6 +12,7 @@ import com.pms.order.domain.payment.service.PaymentService;
 import com.pms.order.domain.product.entity.Product;
 import com.pms.order.domain.product.entity.ProductStatus;
 import com.pms.order.domain.product.repository.ProductRepository;
+import com.pms.order.event.OrderCancelledEvent;
 import com.pms.order.global.exception.BusinessException;
 import com.pms.order.global.exception.ErrorCode;
 import com.pms.order.support.TestFixture;
@@ -122,6 +123,57 @@ class PaymentServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
                             .isEqualTo(ErrorCode.DUPLICATE_REQUEST));
+        }
+
+        @Test
+        @DisplayName("외부 결제 실패 시 주문 상태가 CANCELLED로 전이된다")
+        void should_cancel_order_when_payment_fails() {
+            // given
+            Order order = TestFixture.order(1L, "ORD-20260409-000001", member, OrderStatus.PENDING, BigDecimal.valueOf(29900));
+            OrderItem orderItem = TestFixture.orderItem(1L, order, product, 2);
+            order.addItem(orderItem);
+
+            given(orderRepository.findByIdAndMemberId(1L, 1L)).willReturn(Optional.of(order));
+            given(paymentRepository.findByOrderIdAndStatusNot(eq(1L), any())).willReturn(Optional.empty());
+            given(externalPaymentClient.requestPayment(any(), any()))
+                    .willThrow(new BusinessException(ErrorCode.PAYMENT_FAILED));
+            given(productRepository.findByIdWithLock(10L)).willReturn(Optional.of(product));
+            given(paymentRepository.save(any(Payment.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+            // when & then
+            assertThatThrownBy(() -> paymentService.requestPayment(1L, 1L))
+                    .isInstanceOf(BusinessException.class);
+
+            assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        }
+
+        @Test
+        @DisplayName("외부 결제 실패 시 OrderCancelledEvent가 발행된다")
+        void should_publish_order_cancelled_event_when_payment_fails() {
+            // given
+            Order order = TestFixture.order(1L, "ORD-20260409-000001", member, OrderStatus.PENDING, BigDecimal.valueOf(29900));
+            OrderItem orderItem = TestFixture.orderItem(1L, order, product, 1);
+            order.addItem(orderItem);
+
+            given(orderRepository.findByIdAndMemberId(1L, 1L)).willReturn(Optional.of(order));
+            given(paymentRepository.findByOrderIdAndStatusNot(eq(1L), any())).willReturn(Optional.empty());
+            given(externalPaymentClient.requestPayment(any(), any()))
+                    .willThrow(new BusinessException(ErrorCode.PAYMENT_FAILED));
+            given(productRepository.findByIdWithLock(10L)).willReturn(Optional.of(product));
+            given(paymentRepository.save(any(Payment.class))).willAnswer(invocation -> invocation.getArgument(0));
+
+            // when
+            assertThatThrownBy(() -> paymentService.requestPayment(1L, 1L))
+                    .isInstanceOf(BusinessException.class);
+
+            // then
+            var eventCaptor = org.mockito.ArgumentCaptor.forClass(Object.class);
+            verify(applicationEventPublisher).publishEvent(eventCaptor.capture());
+            assertThat(eventCaptor.getValue()).isInstanceOf(OrderCancelledEvent.class);
+            OrderCancelledEvent event = (OrderCancelledEvent) eventCaptor.getValue();
+            assertThat(event.getData().getOrderId()).isEqualTo(1L);
+            assertThat(event.getData().getOrderNumber()).isEqualTo("ORD-20260409-000001");
+            assertThat(event.getData().getReason()).isEqualTo("결제 실패로 인한 자동 취소");
         }
 
         @Test

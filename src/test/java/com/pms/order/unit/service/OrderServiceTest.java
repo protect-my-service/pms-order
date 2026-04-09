@@ -11,6 +11,8 @@ import com.pms.order.domain.order.dto.OrderResponse;
 import com.pms.order.domain.order.entity.Order;
 import com.pms.order.domain.order.entity.OrderItem;
 import com.pms.order.domain.order.entity.OrderStatus;
+import com.pms.order.domain.order.entity.OrderNumberSequence;
+import com.pms.order.domain.order.repository.OrderNumberSequenceRepository;
 import com.pms.order.domain.order.repository.OrderRepository;
 import com.pms.order.domain.order.service.OrderService;
 import com.pms.order.domain.payment.entity.Payment;
@@ -36,7 +38,6 @@ import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.util.List;
 import com.pms.order.domain.order.dto.OrderCancelResponse;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,6 +57,8 @@ class OrderServiceTest {
 
     @Mock
     private OrderRepository orderRepository;
+    @Mock
+    private OrderNumberSequenceRepository orderNumberSequenceRepository;
     @Mock
     private MemberRepository memberRepository;
     @Mock
@@ -100,7 +103,11 @@ class OrderServiceTest {
             given(cartRepository.findByMemberId(1L)).willReturn(Optional.of(cart));
             given(cartItemRepository.findAllByIdInAndCartId(List.of(100L), 1L)).willReturn(List.of(cartItem));
             given(productRepository.findByIdWithLock(10L)).willReturn(Optional.of(productA));
-
+            given(orderNumberSequenceRepository.save(any(OrderNumberSequence.class))).willAnswer(invocation -> {
+                OrderNumberSequence seq = invocation.getArgument(0);
+                ReflectionTestUtils.setField(seq, "id", 1L);
+                return seq;
+            });
             given(orderRepository.save(any(Order.class))).willAnswer(invocation -> {
                 Order order = invocation.getArgument(0);
                 ReflectionTestUtils.setField(order, "id", 1L);
@@ -168,7 +175,11 @@ class OrderServiceTest {
             given(cartRepository.findByMemberId(1L)).willReturn(Optional.of(cart));
             given(cartItemRepository.findAllByIdInAndCartId(List.of(100L), 1L)).willReturn(List.of(cartItem));
             given(productRepository.findByIdWithLock(10L)).willReturn(Optional.of(soldOutProduct));
-
+            given(orderNumberSequenceRepository.save(any(OrderNumberSequence.class))).willAnswer(invocation -> {
+                OrderNumberSequence seq = invocation.getArgument(0);
+                ReflectionTestUtils.setField(seq, "id", 1L);
+                return seq;
+            });
             given(orderRepository.save(any(Order.class))).willAnswer(invocation -> {
                 Order order = invocation.getArgument(0);
                 ReflectionTestUtils.setField(order, "id", 1L);
@@ -195,7 +206,11 @@ class OrderServiceTest {
             given(cartRepository.findByMemberId(1L)).willReturn(Optional.of(cart));
             given(cartItemRepository.findAllByIdInAndCartId(List.of(100L), 1L)).willReturn(List.of(cartItem));
             given(productRepository.findByIdWithLock(10L)).willReturn(Optional.of(lowStockProduct));
-
+            given(orderNumberSequenceRepository.save(any(OrderNumberSequence.class))).willAnswer(invocation -> {
+                OrderNumberSequence seq = invocation.getArgument(0);
+                ReflectionTestUtils.setField(seq, "id", 1L);
+                return seq;
+            });
             given(orderRepository.save(any(Order.class))).willAnswer(invocation -> {
                 Order order = invocation.getArgument(0);
                 ReflectionTestUtils.setField(order, "id", 1L);
@@ -292,6 +307,42 @@ class OrderServiceTest {
                     .isInstanceOf(BusinessException.class)
                     .satisfies(ex -> assertThat(((BusinessException) ex).getErrorCode())
                             .isEqualTo(ErrorCode.ORDER_NOT_FOUND));
+        }
+    }
+
+    @Nested
+    @DisplayName("주문번호 생성")
+    class GenerateOrderNumber {
+
+        @Test
+        @DisplayName("주문번호는 DB에서 발급한 시퀀스 ID로 생성된다")
+        void should_generate_order_number_using_db_sequence() {
+            // given
+            CartItem cartItem = TestFixture.cartItem(100L, cart, productA, 1);
+            CreateOrderRequest request = new CreateOrderRequest();
+            ReflectionTestUtils.setField(request, "cartItemIds", List.of(100L));
+
+            given(memberRepository.findById(1L)).willReturn(Optional.of(member));
+            given(cartRepository.findByMemberId(1L)).willReturn(Optional.of(cart));
+            given(cartItemRepository.findAllByIdInAndCartId(List.of(100L), 1L)).willReturn(List.of(cartItem));
+            given(productRepository.findByIdWithLock(10L)).willReturn(Optional.of(productA));
+            given(orderNumberSequenceRepository.save(any(OrderNumberSequence.class))).willAnswer(invocation -> {
+                OrderNumberSequence seq = invocation.getArgument(0);
+                ReflectionTestUtils.setField(seq, "id", 42L);
+                return seq;
+            });
+            given(orderRepository.save(any(Order.class))).willAnswer(invocation -> {
+                Order order = invocation.getArgument(0);
+                ReflectionTestUtils.setField(order, "id", 1L);
+                return order;
+            });
+
+            // when
+            OrderResponse response = orderService.createOrder(1L, request);
+
+            // then — DB가 발급한 id(42)가 시퀀스로 사용된다
+            assertThat(response.getOrderNumber()).endsWith("-000042");
+            verify(orderNumberSequenceRepository).save(any(OrderNumberSequence.class));
         }
     }
 }

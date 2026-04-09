@@ -93,4 +93,10 @@ public class TestDataHelper {
         return jdbcTemplate.queryForObject(
                 "SELECT status FROM orders WHERE id = ?", String.class, orderId);
     }
+
+    public int countPaymentsByStatus(Long orderId, String status) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM payment WHERE order_id = ? AND status = ?",
+                Integer.class, orderId, status);
+    }
 }

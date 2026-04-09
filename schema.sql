@@ -79,3 +79,7 @@ CREATE TABLE payment (
 );
 
 CREATE INDEX idx_orders_member_id ON orders(member_id);
+
+CREATE TABLE order_number_sequence (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY
+);
